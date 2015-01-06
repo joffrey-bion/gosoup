@@ -33,7 +33,6 @@ const (
 )
 
 func TestGetChildren(t *testing.T) {
-	fmt.Println(HTML)
 	doc, _ := html.Parse(strings.NewReader(HTML))
 	descendants, _ := GetMatchingDescendants(doc, func(n *html.Node) bool { return strings.Contains(n.Data, "h") })
 	i := 0
