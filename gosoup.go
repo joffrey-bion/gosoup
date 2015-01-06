@@ -1,13 +1,42 @@
-// A helper to explore the DOM of an HTML file
+/* 
+A helper to explore the DOM of an HTML file.
+
+The iteration methods provided here return 2 channels: an output channel, to read 
+the iterated elements, and an exit channel.
+
+The caller should send something (the boolean value does not matter) on the exit
+channel if he does not exhaust the channel. This prevents the internal goroutines 
+from blocking forever if there are more elements to send. For instance:
+
+    children, exit := GetChildren(node)
+    for child := range children {
+        if (something) {
+            // we break early from the loop, notify via exit channel
+            exit <- true
+            break  
+        }
+        doNormalStuff()
+    }
+
+If the loop ends normally, there is no need to send anything on the exit channel.
+There is also no need to close the channels. Gosoup will close the output channel
+when all elements have been sent in order to end the caller's loop.
+*/
 package gosoup
 
 import (
 	"golang.org/x/net/html"
 	"strings"
-    "sync"
+	"sync"
 )
 
-func forward(in <-chan *html.Node, out chan *html.Node) {
+func forwardBools(in <-chan bool, out chan bool) {
+	for e := range in {
+		out <- e
+	}
+}
+
+func forwardNodes(in <-chan *html.Node, out chan *html.Node) {
 	for e := range in {
 		out <- e
 	}
@@ -18,17 +47,24 @@ func forward(in <-chan *html.Node, out chan *html.Node) {
 // The order is unspecified.
 // The DOM tree mustn't be modified while reading from the returned channel,
 // because the iteration is done concurrently.
-func GetMatchingChildren(node *html.Node, predicate func(node *html.Node) bool) <-chan *html.Node {
+func GetMatchingChildren(node *html.Node, predicate func(node *html.Node) bool) (<-chan *html.Node, chan bool) {
 	out := make(chan *html.Node)
+	exit := make(chan bool)
 	go func() {
 		for child := node.FirstChild; child != nil; child = child.NextSibling {
 			if predicate(child) {
-				out <- child
+				select {
+				case <-exit:
+					close(out)
+					return
+				default:
+					out <- child
+				}
 			}
 		}
 		close(out)
 	}()
-	return out
+	return out, exit
 }
 
 // GetChildren finds the given node's direct children, and sends them over the
@@ -36,36 +72,59 @@ func GetMatchingChildren(node *html.Node, predicate func(node *html.Node) bool) 
 // The order is unspecified.
 // The DOM tree mustn't be modified while reading from the returned channel,
 // because the iteration is done concurrently.
-func GetChildren(node *html.Node) <-chan *html.Node {
+func GetChildren(node *html.Node) (<-chan *html.Node, chan bool) {
 	trueFunc := func(node *html.Node) bool {
 		return true
 	}
 	return GetMatchingChildren(node, trueFunc)
 }
 
-// GetMatchingDescendents finds the given node's descendents that match the
+// GetMatchingDescendants finds the given node's descendants that match the
 // given predicate, and sends them over the returned channel.
 // The order is unspecified.
 // The DOM tree mustn't be modified while reading from the returned channel,
 // because the iteration is done concurrently.
-func GetMatchingDescendents(node *html.Node, predicate func(node *html.Node) bool) <-chan *html.Node {
+func GetMatchingDescendants(node *html.Node, predicate func(node *html.Node) bool) (<-chan *html.Node, chan bool) {
 	out := make(chan *html.Node, 20)
+	exit := make(chan bool, 1)
 	go func() {
 		var wg sync.WaitGroup
-		for child := range GetChildren(node) {
-			if predicate(child) {
-				out <- child
-			}
-			go func() {
+		children, _ := GetChildren(node)
+		for child := range children {
+			select {
+			case <-exit:
+				wg.Wait()
+				close(out)
+				return
+			default:
+				if predicate(child) {
+					out <- child
+				}
 				wg.Add(1)
-				defer wg.Done()
-				forward(GetMatchingDescendents(child, predicate), out)
-			}()
+				go func() {
+					defer wg.Done()
+					in, subexit := GetMatchingDescendants(child, predicate)
+					go forwardBools(exit, subexit)
+					forwardNodes(in, out)
+				}()
+			}
 		}
 		wg.Wait()
 		close(out)
 	}()
-	return out
+	return out, exit
+}
+
+// GetDescendants finds the given node's descendants, and sends them over the
+// returned channel.
+// The order is unspecified.
+// The DOM tree mustn't be modified while reading from the returned channel,
+// because the iteration is done concurrently.
+func GetDescendants(node *html.Node) (<-chan *html.Node, chan bool) {
+	trueFunc := func(node *html.Node) bool {
+		return true
+	}
+	return GetMatchingDescendants(node, trueFunc)
 }
 
 // GetChildrenByAttributeValueContaining finds the given node's direct children
@@ -73,7 +132,7 @@ func GetMatchingDescendents(node *html.Node, predicate func(node *html.Node) boo
 // The order is unspecified.
 // The DOM tree mustn't be modified while reading from the returned channel,
 // because the iteration is done concurrently.
-func GetChildrenByAttributeValueContaining(node *html.Node, attrKey, match string) <-chan *html.Node {
+func GetChildrenByAttributeValueContaining(node *html.Node, attrKey, match string) (<-chan *html.Node, chan bool) {
 	trueFunc := func(node *html.Node) bool {
 		return HasAttributeValueContaining(node, attrKey, match)
 	}
