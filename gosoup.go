@@ -2,11 +2,11 @@
 A helper to explore the DOM of an HTML file.
 
 The iteration methods provided here return 2 channels: an output channel, to read 
-the iterated elements, and an exit channel.
+the iterated elements from, and an exit channel.
 
 The caller should send something (the boolean value does not matter) on the exit
-channel if he does not exhaust the channel. This prevents the internal goroutines 
-from blocking forever if there are more elements to send. For instance:
+channel if he does not exhaust the output channel. This prevents the internal
+goroutines from blocking forever if there are more elements to send. For instance:
 
     children, exit := GetChildren(node)
     for child := range children {
@@ -43,7 +43,8 @@ func forwardNodes(in <-chan *html.Node, out chan *html.Node) {
 }
 
 // GetMatchingChildren finds the given node's direct children that match the
-// given predicate, and sends them over the returned channel.
+// given predicate, and sends them over the output channel.
+//
 // The order is unspecified.
 // The DOM tree mustn't be modified while reading from the returned channel,
 // because the iteration is done concurrently.
@@ -68,7 +69,8 @@ func GetMatchingChildren(node *html.Node, predicate func(node *html.Node) bool) 
 }
 
 // GetChildren finds the given node's direct children, and sends them over the
-// returned channel.
+// output channel.
+//
 // The order is unspecified.
 // The DOM tree mustn't be modified while reading from the returned channel,
 // because the iteration is done concurrently.
@@ -80,7 +82,8 @@ func GetChildren(node *html.Node) (<-chan *html.Node, chan bool) {
 }
 
 // GetMatchingDescendants finds the given node's descendants that match the
-// given predicate, and sends them over the returned channel.
+// given predicate, and sends them over the output channel.
+//
 // The order is unspecified.
 // The DOM tree mustn't be modified while reading from the returned channel,
 // because the iteration is done concurrently.
@@ -116,7 +119,8 @@ func GetMatchingDescendants(node *html.Node, predicate func(node *html.Node) boo
 }
 
 // GetDescendants finds the given node's descendants, and sends them over the
-// returned channel.
+// output channel.
+//
 // The order is unspecified.
 // The DOM tree mustn't be modified while reading from the returned channel,
 // because the iteration is done concurrently.
@@ -129,6 +133,7 @@ func GetDescendants(node *html.Node) (<-chan *html.Node, chan bool) {
 
 // GetChildrenByAttributeValueContaining finds the given node's direct children
 // that have attributes whose value contains the match string.
+//
 // The order is unspecified.
 // The DOM tree mustn't be modified while reading from the returned channel,
 // because the iteration is done concurrently.
