@@ -32,7 +32,6 @@ package gosoup
 
 import (
 	"golang.org/x/net/html"
-	"sync"
 	"strings"
 	"errors"
 )
@@ -43,23 +42,6 @@ func Root(node *html.Node) *html.Node {
 		node = node.Parent
 	}
 	return node
-}
-
-func forward(in <-chan interface{}, out chan interface{}) {
-	for e := range in {
-		out <- e
-	}
-}
-
-func forwardNodes(in <-chan *html.Node, out chan *html.Node) {
-	for e := range in {
-		out <- e
-	}
-}
-
-// alwaysTrue always returns true, no matter the input node
-func alwaysTrue(node *html.Node) bool {
-	return true
 }
 
 // First retrieves the first node from the given output channel, and takes
@@ -91,96 +73,6 @@ func Collect(output <-chan *html.Node, exit chan interface{}) []*html.Node {
 	return list
 }
 
-// GetMatchingChildren finds the given node's direct children that match the
-// given predicate, and sends them into the output channel.
-//
-// The caller should send anything into the exit channel to indicate that no
-// more nodes will be read, unless he finishes the loop.
-func GetMatchingChildren(node *html.Node, predicate func(node *html.Node) bool) (output <-chan *html.Node, exit chan interface{}) {
-	if node == nil {
-		panic("GetMatchingChildren: null input node")
-	}
-	out := make(chan *html.Node)
-	exit = make(chan interface{}, 1)
-	go func() {
-		for child := node.FirstChild; child != nil; child = child.NextSibling {
-			if predicate(child) {
-				select {
-				case <-exit:
-					// the caller will not read any more nodes, so
-					// don't try to send to avoid blocking forever
-					close(out)
-					return
-				default:
-					out <- child
-				}
-			}
-		}
-		close(out) // to end the caller's loop
-	}()
-	return out, exit
-}
-
-// GetChildren finds the given node's direct children, and sends them into the
-// output channel.
-//
-// The caller should send anything into the exit channel to indicate that no
-// more nodes will be read, unless he finishes the loop.
-func GetChildren(node *html.Node) (output <-chan *html.Node, exit chan interface{}) {
-	return GetMatchingChildren(node, alwaysTrue)
-}
-
-// GetMatchingDescendants finds the given node's descendants that match the
-// given predicate, and sends them into the output channel.
-//
-// The caller should send anything into the exit channel to indicate that no
-// more nodes will be read, unless he finishes the loop.
-func GetMatchingDescendants(node *html.Node, predicate func(node *html.Node) bool) (output <-chan *html.Node, exit chan interface{}) {
-	if node == nil {
-		panic("GetMatchingDescendants: null input node")
-	}
-	out := make(chan *html.Node, 20)
-	exit = make(chan interface{}, 1)
-	go func() {
-		var wg sync.WaitGroup
-		children, _ := GetChildren(node)
-		for child := range children {
-			select {
-			case <-exit:
-				// the caller will not read any more nodes, so
-				// don't try to send to avoid blocking forever
-				wg.Wait()
-				close(out)
-				return
-			default:
-				if predicate(child) {
-					out <- child
-				}
-				// browse the child's children
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					in, subexit := GetMatchingDescendants(child, predicate)
-					go forward(exit, subexit)
-					forwardNodes(in, out)
-				}()
-			}
-		}
-		wg.Wait()
-		close(out)
-	}()
-	return out, exit
-}
-
-// GetDescendants finds the given node's descendants, and sends them into the
-// output channel.
-//
-// The caller should send anything into the exit channel to indicate that no
-// more nodes will be read, unless he finishes the loop.
-func GetDescendants(node *html.Node) (output <-chan *html.Node, exit chan interface{}) {
-	return GetMatchingDescendants(node, alwaysTrue)
-}
-
 func GetDocContentType(node *html.Node) (string, error) {
 	root := Root(node)
 	head := First(GetDescendantsByTag(root, "head"))
@@ -191,24 +83,14 @@ func GetDocContentType(node *html.Node) (string, error) {
 	if meta == nil {
 		return "", errors.New("GetDocCharset: meta not found")
 	}
-	content := GetAttrValue(meta, "content")
-	charsetWithBullshit := strings.Split(content, "charset=")[1]
-	// trim potential trailing stuff
-	charsetWithoutBullshit := strings.Split(charsetWithBullshit, ";")[0]
-	return strings.Split(charsetWithoutBullshit, " ")[0], nil // just in case
+	return GetAttrValue(meta, "content"), nil
 }
 
 func GetDocCharset(node *html.Node) (string, error) {
-	root := Root(node)
-	head := First(GetDescendantsByTag(root, "head"))
-	if head == nil {
-		return "", errors.New("GetDocCharset: head not found")
+	content, err := GetDocContentType(node)
+	if err != nil {
+		return "", err
 	}
-	meta := First(GetDescendantsByAttrValueContaining(head, "content", "charset="))
-	if meta == nil {
-		return "", errors.New("GetDocCharset: meta not found")
-	}
-	content := GetAttrValue(meta, "content")
 	charsetWithBullshit := strings.Split(content, "charset=")[1]
 	// trim potential trailing stuff
 	charsetWithoutBullshit := strings.Split(charsetWithBullshit, ";")[0]

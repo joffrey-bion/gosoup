@@ -33,13 +33,6 @@ const (
 )
 
 func TestGetChildren(t *testing.T) {
-	doc, _ := html.Parse(strings.NewReader(HTML))
-	descendants, _ := GetMatchingDescendants(doc, func(n *html.Node) bool { return strings.Contains(n.Data, "h") })
-	i := 0
-	fmt.Println("Descendants:")
-	for child := range descendants {
-		fmt.Printf("%d - '%s'\n", i, child.Data)
-		i++
-	}
+	// TODO
 	t.SkipNow()
 }
