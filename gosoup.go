@@ -1,5 +1,6 @@
 /*
-GoSoup is a helper to explore the DOM of an HTML file.
+GoSoup is a helper to explore the DOM of an HTML file. It wraps the golang.org/x/net/html
+package, providing helpful methods.
 
 The iteration methods provided here return 2 channels: an output channel, to read
 the iterated elements from, and an exit channel.
@@ -11,11 +12,11 @@ goroutines from blocking forever if there are more elements to send. For instanc
     children, exit := GetChildren(node)
     for child := range children {
         if (something) {
-            // we break early from the loop, notify via exit channel
+            // we break early from the loop, notify GoSoup via the exit channel
             exit <- true
             break
         }
-        doNormalStuff()
+        doStuffWith(child)
     }
 
 If the loop ends normally, there is no need to send anything on the exit channel.
