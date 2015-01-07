@@ -31,9 +31,9 @@ the iteration is done concurrently.
 package gosoup
 
 import (
+	"errors"
 	"golang.org/x/net/html"
 	"strings"
-	"errors"
 )
 
 // Root returns the root of the document containing the given node.

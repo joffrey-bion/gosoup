@@ -42,7 +42,7 @@ func GetAttrValueOrDefault(node *html.Node, attrKey, defaultValue string) string
 // HasAttrValueContaining returns true if the specified attribute's value
 // contains the match string for the given node.
 func HasAttrValueContaining(node *html.Node, attrKey, match string) bool {
-	return strings.Contains(GetAttrValue(node, attrKey), match)
+	return HasAttr(node, attrKey) && strings.Contains(GetAttrValue(node, attrKey), match)
 }
 
 func predicateHasAttrValueContaining(attrKey, match string) func(node *html.Node) bool {
