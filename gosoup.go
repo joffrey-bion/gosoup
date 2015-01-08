@@ -33,61 +33,23 @@ package gosoup
 
 import (
 	"errors"
-	"golang.org/x/net/html"
 	"strings"
 )
 
-// Root returns the root of the document containing the given node.
-func Root(node *html.Node) *html.Node {
-	for node.Parent != nil {
-		node = node.Parent
-	}
-	return node
-}
-
-// First retrieves the first node from the given output channel, and takes
-// care of the cleaning through the exit channel.
-//
-// This function can be particularly useful when combined with the iterating
-// functions of GoSoup:
-//
-//     firstChild := gosoup.First(gosoup.GetChildren(node))
-//
-//     firstMyClassDescendant := gosoup.First(gosoup.GetDescendantsByAttributeValueContaining(node, "class", "myClass"))
-//
-// No need to take care of channels here.
-func First(output <-chan *html.Node, exit chan interface{}) *html.Node {
-	node := <-output
-	exit <- true
-	return node
-}
-
-// Collect gathers all nodes from the given output channel in a slice.
-//
-// This function can be particularly useful when combined with the iterating
-// functions of GoSoup.
-func Collect(output <-chan *html.Node, exit chan interface{}) []*html.Node {
-	var list []*html.Node
-	for node := range output {
-		list = append(list, node)
-	}
-	return list
-}
-
-func GetDocContentType(node *html.Node) (string, error) {
-	root := Root(node)
-	head := First(GetDescendantsByTag(root, "head"))
+func GetDocContentType(node *Node) (string, error) {
+	root := node.Root()
+	head := First(root.DescendantsByTag("head"))
 	if head == nil {
 		return "", errors.New("GetDocCharset: head not found")
 	}
-	meta := First(GetDescendantsByAttrValueContaining(head, "content", "charset="))
+	meta := First(head.DescendantsByAttrContaining("content", "charset="))
 	if meta == nil {
 		return "", errors.New("GetDocCharset: meta not found")
 	}
-	return GetAttrValue(meta, "content"), nil
+	return meta.Attr("content"), nil
 }
 
-func GetDocCharset(node *html.Node) (string, error) {
+func GetDocCharset(node *Node) (string, error) {
 	content, err := GetDocContentType(node)
 	if err != nil {
 		return "", err

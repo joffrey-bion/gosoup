@@ -53,6 +53,7 @@ func WrapTree(hnode *html.Node) *Node {
 	n := new(Node)
 
 	// copy data
+	n.Type = NodeType(hnode.Type)
 	n.DataAtom = hnode.DataAtom
 	n.Data = hnode.Data
 	n.Namespace = hnode.Namespace
@@ -93,6 +94,7 @@ func UnwrapTree(node *Node) *html.Node {
 	h := new(html.Node)
 
 	// copy data
+	h.Type = html.NodeType(node.Type)
 	h.DataAtom = node.DataAtom
 	h.Data = node.Data
 	h.Namespace = node.Namespace

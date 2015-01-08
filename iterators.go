@@ -1,7 +1,6 @@
 package gosoup
 
 import (
-	"golang.org/x/net/html"
 	"strings"
 	"sync"
 )
@@ -10,42 +9,71 @@ const (
 	BLANK string = " \t\n\r"
 )
 
+// First retrieves the first node from the given output channel, and takes
+// care of the cleaning through the exit channel.
+//
+// This function can be particularly useful when combined with the iterating
+// functions of GoSoup:
+//
+//     firstChild := gosoup.First(gosoup.GetChildren(node))
+//
+//     firstMyClassDescendant := gosoup.First(gosoup.GetDescendantsByAttributeValueContaining(node, "class", "myClass"))
+//
+// No need to take care of channels here.
+func First(output <-chan *Node, exit chan interface{}) *Node {
+	node := <-output
+	exit <- true
+	return node
+}
+
+// Collect gathers all nodes from the given output channel in a slice.
+//
+// This function can be particularly useful when combined with the iterating
+// functions of GoSoup.
+func Collect(output <-chan *Node, exit chan interface{}) []*Node {
+	var list []*Node
+	for node := range output {
+		list = append(list, node)
+	}
+	return list
+}
+
 func forward(in <-chan interface{}, out chan interface{}) {
 	for e := range in {
 		out <- e
 	}
 }
 
-func forwardNodes(in <-chan *html.Node, out chan *html.Node) {
+func forwardNodes(in <-chan *Node, out chan *Node) {
 	for e := range in {
 		out <- e
 	}
 }
 
 // notBlank returns true if the node's data is not full of blank space
-func notBlank(node *html.Node) bool {
+func notBlank(node *Node) bool {
 	return strings.Trim(node.Data, BLANK) != ""
 }
 
-func clean(node *html.Node) *html.Node {
-	if node.Type == html.TextNode {
+func clean(node *Node) *Node {
+	if node.Type == TextNode {
 		node.Data = strings.Trim(node.Data, BLANK)
 	}
 	return node
 }
 
-// iterateOnDescendants finds the given node's descendants that match the
+// iterateOnDescendants finds this node's descendants that match the
 // given predicate, and sends them into the output channel.
 //
 // If recursive is false, only direct children are considered.
 //
 // The caller should send anything into the exit channel to indicate that no
 // more nodes will be read, unless he finishes the loop.
-func iterateOnDescendants(node *html.Node, predicate func(node *html.Node) bool, recursive bool) (output <-chan *html.Node, exit chan interface{}) {
+func (node *Node) iterateOnDescendants(predicate func(node *Node) bool, recursive bool) (output <-chan *Node, exit chan interface{}) {
 	if node == nil {
 		panic("iterateOnDescendants: null input node")
 	}
-	out := make(chan *html.Node, 20)
+	out := make(chan *Node, 20)
 	exit = make(chan interface{}, 1)
 	go func() {
 		var wg sync.WaitGroup
@@ -67,7 +95,7 @@ func iterateOnDescendants(node *html.Node, predicate func(node *html.Node) bool,
 					wg.Add(1)
 					go func() {
 						defer wg.Done()
-						in, subexit := iterateOnDescendants(capturedChild, predicate, recursive)
+						in, subexit := capturedChild.iterateOnDescendants(predicate, recursive)
 						go forward(exit, subexit)
 						forwardNodes(in, out)
 					}()
@@ -80,38 +108,86 @@ func iterateOnDescendants(node *html.Node, predicate func(node *html.Node) bool,
 	return out, exit
 }
 
-// GetMatchingChildren finds the given node's direct children that match the
+// MatchingChildren finds this node's direct children that match the
 // given predicate, and sends them into the output channel.
 //
 // The caller should send anything into the exit channel to indicate that no
 // more nodes will be read, unless he finishes the loop.
-func GetMatchingChildren(node *html.Node, predicate func(node *html.Node) bool) (output <-chan *html.Node, exit chan interface{}) {
-	return iterateOnDescendants(node, predicate, false)
+func (node *Node) MatchingChildren(predicate func(node *Node) bool) (output <-chan *Node, exit chan interface{}) {
+	return node.iterateOnDescendants(predicate, false)
 }
 
-// GetMatchingDescendants finds the given node's descendants that match the
+// MatchingDescendants finds this node's descendants that match the
 // given predicate, and sends them into the output channel.
 //
 // The caller should send anything into the exit channel to indicate that no
 // more nodes will be read, unless he finishes the loop.
-func GetMatchingDescendants(node *html.Node, predicate func(node *html.Node) bool) (output <-chan *html.Node, exit chan interface{}) {
-	return iterateOnDescendants(node, predicate, true)
+func (node *Node) MatchingDescendants(predicate func(node *Node) bool) (output <-chan *Node, exit chan interface{}) {
+	return node.iterateOnDescendants(predicate, true)
 }
 
-// GetChildren finds the given node's direct children, and sends them into the
+// Children finds this node's direct children, and sends them into the
 // output channel.
 //
 // The caller should send anything into the exit channel to indicate that no
 // more nodes will be read, unless he finishes the loop.
-func GetChildren(node *html.Node) (output <-chan *html.Node, exit chan interface{}) {
-	return GetMatchingChildren(node, notBlank)
+func (node *Node) Children() (output <-chan *Node, exit chan interface{}) {
+	return node.MatchingChildren(notBlank)
 }
 
-// GetDescendants finds the given node's descendants, and sends them into the
+// Descendants finds this node's descendants, and sends them into the
 // output channel.
 //
 // The caller should send anything into the exit channel to indicate that no
 // more nodes will be read, unless he finishes the loop.
-func GetDescendants(node *html.Node) (output <-chan *html.Node, exit chan interface{}) {
-	return GetMatchingDescendants(node, notBlank)
+func (node *Node) Descendants() (output <-chan *Node, exit chan interface{}) {
+	return node.MatchingDescendants(notBlank)
+}
+
+func predicateIsTag(tagName string) func(node *Node) bool {
+	return func(node *Node) bool {
+		return node.IsTag(tagName)
+	}
+}
+
+// ChildrenByTag finds the given node's direct children with the specified
+// tag name.
+//
+// The caller should send anything into the exit channel to indicate that no 
+// more nodes will be read, unless he finishes the loop.
+func (node *Node) ChildrenByTag(tagName string) (output <-chan *Node, exit chan interface{}) {
+	return node.MatchingChildren(predicateIsTag(tagName))
+}
+
+// DescendantsByTag finds the given node's descendants with the specified
+// tag name.
+//
+// The caller should send anything into the exit channel to indicate that no 
+// more nodes will be read, unless he finishes the loop.
+func (node *Node) DescendantsByTag(tagName string) (output <-chan *Node, exit chan interface{}) {
+	return node.MatchingDescendants(predicateIsTag(tagName))
+}
+
+func predicateHasAttrContaining(attrKey, match string) func(node *Node) bool {
+	return func(node *Node) bool {
+		return node.HasAttrContaining(attrKey, match)
+	}
+}
+
+// ChildrenByAttrValueContaining finds the given node's direct children
+// that have attributes whose value contains the match string.
+//
+// The caller should send anything into the exit channel to indicate that no 
+// more nodes will be read, unless he finishes the loop.
+func (node *Node) ChildrenByAttrContaining(attrKey, match string) (output <-chan *Node, exit chan interface{}) {
+	return node.MatchingChildren(predicateHasAttrContaining(attrKey, match))
+}
+
+// DescendantsByAttrValueContaining finds the given node's direct children
+// that have attributes whose value contains the match string.
+//
+// The caller should send anything into the exit channel to indicate that no 
+// more nodes will be read, unless he finishes the loop.
+func (node *Node) DescendantsByAttrContaining(attrKey, match string) (output <-chan *Node, exit chan interface{}) {
+	return node.MatchingDescendants(predicateHasAttrContaining(attrKey, match))
 }
