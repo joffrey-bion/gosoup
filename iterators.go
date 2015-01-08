@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	BLANK string = " \t\n\r"
+	blank string = " \t\n\r"
 )
 
 // First retrieves the first node from the given output channel, and takes
@@ -52,13 +52,13 @@ func forwardNodes(in <-chan *Node, out chan *Node) {
 
 // notBlank returns true if the node's data is not full of blank space
 func notBlank(node *Node) bool {
-	return strings.Trim(node.Data, BLANK) != ""
+	return strings.Trim(node.Data, blank) != ""
 }
 
 // clean trims leading and trailing whitespace if the node is a TextNode.
 func clean(node *Node) *Node {
 	if node.Type == TextNode {
-		node.Data = strings.Trim(node.Data, BLANK)
+		node.Data = strings.Trim(node.Data, blank)
 	}
 	return node
 }
