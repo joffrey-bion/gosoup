@@ -59,7 +59,7 @@ func WrapTree(hnode *html.Node) *Node {
 	n.DataAtom = hnode.DataAtom
 	n.Data = hnode.Data
 	n.Namespace = hnode.Namespace
-	n.Attrs = make([]Attribute, len(hnode.Attr))
+	n.Attrs = make([]Attribute, 0, len(hnode.Attr))
 	for _, hattr := range hnode.Attr {
 		n.Attrs = append(n.Attrs, Attribute(hattr))
 	}
@@ -100,7 +100,7 @@ func UnwrapTree(node *Node) *html.Node {
 	h.DataAtom = node.DataAtom
 	h.Data = node.Data
 	h.Namespace = node.Namespace
-	h.Attr = make([]html.Attribute, len(node.Attrs))
+	h.Attr = make([]html.Attribute, 0, len(node.Attrs))
 	for _, attr := range node.Attrs {
 		h.Attr = append(h.Attr, html.Attribute(attr))
 	}
