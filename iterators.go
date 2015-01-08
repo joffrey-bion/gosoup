@@ -15,9 +15,9 @@ const (
 // This function can be particularly useful when combined with the iterating
 // functions of GoSoup:
 //
-//     firstChild := gosoup.First(gosoup.GetChildren(node))
+//     firstChild := gosoup.First(node.Children())
 //
-//     firstMyClassDescendant := gosoup.First(gosoup.GetDescendantsByAttributeValueContaining(node, "class", "myClass"))
+//     firstMyClassDescendant := gosoup.First(node.DescendantsByAttributeValueContaining("class", "myClass"))
 //
 // No need to take care of channels here.
 func First(output <-chan *Node, exit chan interface{}) *Node {
