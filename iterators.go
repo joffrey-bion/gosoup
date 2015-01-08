@@ -64,8 +64,8 @@ func clean(node *Node) *Node {
 	return node
 }
 
-// DescendantsIterator finds this node's descendants that match the
-// given predicate, and sends them into the output channel.
+// DescendantsIterator iterates on this node's descendants in depth-first order,
+// and send into the output channel the ones that match the given predicate.
 //
 // If recursive is false, only direct children are considered.
 //
@@ -93,14 +93,13 @@ func (node *Node) DescendantsIterator(predicate func(node *Node) bool, recursive
 				}
 				if recursive {
 					// browse the child's children
-					capturedChild := child
 					wg.Add(1)
-					go func() {
+					go func(child *Node) {
 						defer wg.Done()
-						in, subexit := capturedChild.DescendantsIterator(predicate, recursive)
+						in, subexit := child.DescendantsIterator(predicate, recursive)
 						go forward(exit, subexit)
 						forwardNodes(in, out)
-					}()
+					}(child)
 				}
 			}
 		}
