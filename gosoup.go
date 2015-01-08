@@ -9,7 +9,7 @@ The caller should send something (the value does not matter) on the exit
 channel if he does not exhaust the output channel. This prevents the internal
 goroutines from blocking forever if there are more elements to send. For instance:
 
-    children, exit := GetChildren(node)
+    children, exit := node.Children()
     for child := range children {
         if (something) {
             // we break early from the loop, notify GoSoup via the exit channel
