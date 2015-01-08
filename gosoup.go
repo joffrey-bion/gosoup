@@ -42,7 +42,7 @@ func GetDocContentType(node *Node) (string, error) {
 	if head == nil {
 		return "", errors.New("GetDocCharset: head not found")
 	}
-	meta := First(head.DescendantsByAttrContaining("content", "charset="))
+	meta := First(head.DescendantsByAttrValueContaining("content", "charset="))
 	if meta == nil {
 		return "", errors.New("GetDocCharset: meta not found")
 	}

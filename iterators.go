@@ -55,6 +55,7 @@ func notBlank(node *Node) bool {
 	return strings.Trim(node.Data, BLANK) != ""
 }
 
+// clean trims leading and trailing whitespace if the node is a TextNode.
 func clean(node *Node) *Node {
 	if node.Type == TextNode {
 		node.Data = strings.Trim(node.Data, BLANK)
@@ -108,21 +109,21 @@ func (node *Node) iterateOnDescendants(predicate func(node *Node) bool, recursiv
 	return out, exit
 }
 
-// MatchingChildren finds this node's direct children that match the
+// ChildrenMatching finds this node's direct children that match the
 // given predicate, and sends them into the output channel.
 //
 // The caller should send anything into the exit channel to indicate that no
 // more nodes will be read, unless he finishes the loop.
-func (node *Node) MatchingChildren(predicate func(node *Node) bool) (output <-chan *Node, exit chan interface{}) {
+func (node *Node) ChildrenMatching(predicate func(node *Node) bool) (output <-chan *Node, exit chan interface{}) {
 	return node.iterateOnDescendants(predicate, false)
 }
 
-// MatchingDescendants finds this node's descendants that match the
+// DescendantsMatching finds this node's descendants that match the
 // given predicate, and sends them into the output channel.
 //
 // The caller should send anything into the exit channel to indicate that no
 // more nodes will be read, unless he finishes the loop.
-func (node *Node) MatchingDescendants(predicate func(node *Node) bool) (output <-chan *Node, exit chan interface{}) {
+func (node *Node) DescendantsMatching(predicate func(node *Node) bool) (output <-chan *Node, exit chan interface{}) {
 	return node.iterateOnDescendants(predicate, true)
 }
 
@@ -132,7 +133,7 @@ func (node *Node) MatchingDescendants(predicate func(node *Node) bool) (output <
 // The caller should send anything into the exit channel to indicate that no
 // more nodes will be read, unless he finishes the loop.
 func (node *Node) Children() (output <-chan *Node, exit chan interface{}) {
-	return node.MatchingChildren(notBlank)
+	return node.ChildrenMatching(notBlank)
 }
 
 // Descendants finds this node's descendants, and sends them into the
@@ -141,7 +142,7 @@ func (node *Node) Children() (output <-chan *Node, exit chan interface{}) {
 // The caller should send anything into the exit channel to indicate that no
 // more nodes will be read, unless he finishes the loop.
 func (node *Node) Descendants() (output <-chan *Node, exit chan interface{}) {
-	return node.MatchingDescendants(notBlank)
+	return node.DescendantsMatching(notBlank)
 }
 
 func predicateIsTag(tagName string) func(node *Node) bool {
@@ -156,7 +157,7 @@ func predicateIsTag(tagName string) func(node *Node) bool {
 // The caller should send anything into the exit channel to indicate that no 
 // more nodes will be read, unless he finishes the loop.
 func (node *Node) ChildrenByTag(tagName string) (output <-chan *Node, exit chan interface{}) {
-	return node.MatchingChildren(predicateIsTag(tagName))
+	return node.ChildrenMatching(predicateIsTag(tagName))
 }
 
 // DescendantsByTag finds the given node's descendants with the specified
@@ -165,12 +166,12 @@ func (node *Node) ChildrenByTag(tagName string) (output <-chan *Node, exit chan 
 // The caller should send anything into the exit channel to indicate that no 
 // more nodes will be read, unless he finishes the loop.
 func (node *Node) DescendantsByTag(tagName string) (output <-chan *Node, exit chan interface{}) {
-	return node.MatchingDescendants(predicateIsTag(tagName))
+	return node.DescendantsMatching(predicateIsTag(tagName))
 }
 
-func predicateHasAttrContaining(attrKey, match string) func(node *Node) bool {
+func predicateAttrValueContains(attrKey, match string) func(node *Node) bool {
 	return func(node *Node) bool {
-		return node.HasAttrContaining(attrKey, match)
+		return node.AttrValueContains(attrKey, match)
 	}
 }
 
@@ -179,8 +180,8 @@ func predicateHasAttrContaining(attrKey, match string) func(node *Node) bool {
 //
 // The caller should send anything into the exit channel to indicate that no 
 // more nodes will be read, unless he finishes the loop.
-func (node *Node) ChildrenByAttrContaining(attrKey, match string) (output <-chan *Node, exit chan interface{}) {
-	return node.MatchingChildren(predicateHasAttrContaining(attrKey, match))
+func (node *Node) ChildrenByAttrValueContaining(attrKey, match string) (output <-chan *Node, exit chan interface{}) {
+	return node.ChildrenMatching(predicateAttrValueContains(attrKey, match))
 }
 
 // DescendantsByAttrValueContaining finds the given node's direct children
@@ -188,6 +189,6 @@ func (node *Node) ChildrenByAttrContaining(attrKey, match string) (output <-chan
 //
 // The caller should send anything into the exit channel to indicate that no 
 // more nodes will be read, unless he finishes the loop.
-func (node *Node) DescendantsByAttrContaining(attrKey, match string) (output <-chan *Node, exit chan interface{}) {
-	return node.MatchingDescendants(predicateHasAttrContaining(attrKey, match))
+func (node *Node) DescendantsByAttrValueContaining(attrKey, match string) (output <-chan *Node, exit chan interface{}) {
+	return node.DescendantsMatching(predicateAttrValueContains(attrKey, match))
 }

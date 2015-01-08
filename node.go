@@ -165,9 +165,9 @@ func (node *Node) AttrOrDefault(attrKey, defaultValue string) string {
 	return defaultValue
 }
 
-// HasAttrContaining returns true if the specified attribute's value
+// AttrValueContains returns true if the specified attribute's value
 // contains the match string.
-func (node *Node) HasAttrContaining(attrKey, match string) bool {
+func (node *Node) AttrValueContains(attrKey, match string) bool {
 	return node.HasAttr(attrKey) && strings.Contains(node.Attr(attrKey), match)
 }
 
