@@ -3,7 +3,6 @@ package gosoup
 import (
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
-	"io"
 	"strings"
 )
 
@@ -28,98 +27,6 @@ type Node struct {
 	Data      string
 	Namespace string
 	Attrs     []Attribute
-}
-
-// Parse returns the parse tree for the HTML from the given Reader. The input is
-// assumed to be UTF-8 encoded.
-func Parse(r io.Reader) (*Node, error) {
-	hnode, err := html.Parse(r)
-	if err != nil {
-		return nil, err
-	}
-	return WrapTree(hnode), nil
-}
-
-// WrapTree converts the given html.Node and all its children into an equivalent
-// tree of gosoup.Node.
-//
-// The returned node has a nil Parent field, and nil NextSibling and PrevSibling
-// fields. However, FirstChildren and LastChildren are populated, and the children
-// themselves are completely linked with all their fields.
-func WrapTree(hnode *html.Node) *Node {
-	if hnode == nil {
-		return nil
-	}
-	n := new(Node)
-
-	// copy data
-	n.Type = NodeType(hnode.Type)
-	n.DataAtom = hnode.DataAtom
-	n.Data = hnode.Data
-	n.Namespace = hnode.Namespace
-	n.Attrs = make([]Attribute, len(hnode.Attr))
-	for _, hattr := range hnode.Attr {
-		n.Attrs = append(n.Attrs, Attribute(hattr))
-	}
-
-	// link to children nodes
-	if hnode.FirstChild == nil {
-		// the node has no children
-		return n
-	}
-
-	n.FirstChild = WrapTree(hnode.FirstChild)
-	n.FirstChild.Parent = n
-	n.LastChild = n.FirstChild
-	for hchild := hnode.FirstChild.NextSibling; hchild != nil; hchild = hchild.NextSibling {
-		newChild := WrapTree(hchild)
-		newChild.Parent = n
-		newChild.PrevSibling = n.LastChild
-		n.LastChild.NextSibling = newChild
-		n.LastChild = newChild
-	}
-	return n
-}
-
-// WrapTree converts the given gosoup.Node and all its children into an equivalent
-// tree of html.Node.
-//
-// The returned node has a nil Parent field, and nil NextSibling and PrevSibling
-// fields. However, FirstChildren and LastChildren are populated, and the children
-// themselves are completely linked with all their fields.
-func UnwrapTree(node *Node) *html.Node {
-	if node == nil {
-		return nil
-	}
-	h := new(html.Node)
-
-	// copy data
-	h.Type = html.NodeType(node.Type)
-	h.DataAtom = node.DataAtom
-	h.Data = node.Data
-	h.Namespace = node.Namespace
-	h.Attr = make([]html.Attribute, len(node.Attrs))
-	for _, attr := range node.Attrs {
-		h.Attr = append(h.Attr, html.Attribute(attr))
-	}
-
-	// link to children nodes
-	if node.FirstChild == nil {
-		// the node has no children
-		return h
-	}
-
-	h.FirstChild = UnwrapTree(node.FirstChild)
-	h.FirstChild.Parent = h
-	h.LastChild = h.FirstChild
-	for child := node.FirstChild.NextSibling; child != nil; child = child.NextSibling {
-		newChild := UnwrapTree(child)
-		newChild.Parent = h
-		newChild.PrevSibling = h.LastChild
-		h.LastChild.NextSibling = newChild
-		h.LastChild = newChild
-	}
-	return h
 }
 
 // Root returns the root of the document containing this node.
