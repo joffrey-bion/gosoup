@@ -7,6 +7,7 @@ import (
 
 const (
 	blank string = " \t\n\r"
+	nodeBufferSize int = 20
 )
 
 // First retrieves the first node from the given output channel, and takes
@@ -63,18 +64,18 @@ func clean(node *Node) *Node {
 	return node
 }
 
-// iterateOnDescendants finds this node's descendants that match the
+// DescendantsIterator finds this node's descendants that match the
 // given predicate, and sends them into the output channel.
 //
 // If recursive is false, only direct children are considered.
 //
 // The caller should send anything into the exit channel to indicate that no
 // more nodes will be read, unless he finishes the loop.
-func (node *Node) iterateOnDescendants(predicate func(node *Node) bool, recursive bool) (output <-chan *Node, exit chan interface{}) {
+func (node *Node) DescendantsIterator(predicate func(node *Node) bool, recursive bool) (output <-chan *Node, exit chan interface{}) {
 	if node == nil {
 		panic("iterateOnDescendants: null input node")
 	}
-	out := make(chan *Node, 20)
+	out := make(chan *Node, nodeBufferSize)
 	exit = make(chan interface{}, 1)
 	go func() {
 		var wg sync.WaitGroup
@@ -96,7 +97,7 @@ func (node *Node) iterateOnDescendants(predicate func(node *Node) bool, recursiv
 					wg.Add(1)
 					go func() {
 						defer wg.Done()
-						in, subexit := capturedChild.iterateOnDescendants(predicate, recursive)
+						in, subexit := capturedChild.DescendantsIterator(predicate, recursive)
 						go forward(exit, subexit)
 						forwardNodes(in, out)
 					}()
@@ -115,7 +116,7 @@ func (node *Node) iterateOnDescendants(predicate func(node *Node) bool, recursiv
 // The caller should send anything into the exit channel to indicate that no
 // more nodes will be read, unless he finishes the loop.
 func (node *Node) ChildrenMatching(predicate func(node *Node) bool) (output <-chan *Node, exit chan interface{}) {
-	return node.iterateOnDescendants(predicate, false)
+	return node.DescendantsIterator(predicate, false)
 }
 
 // DescendantsMatching finds this node's descendants that match the
@@ -124,7 +125,7 @@ func (node *Node) ChildrenMatching(predicate func(node *Node) bool) (output <-ch
 // The caller should send anything into the exit channel to indicate that no
 // more nodes will be read, unless he finishes the loop.
 func (node *Node) DescendantsMatching(predicate func(node *Node) bool) (output <-chan *Node, exit chan interface{}) {
-	return node.iterateOnDescendants(predicate, true)
+	return node.DescendantsIterator(predicate, true)
 }
 
 // Children finds this node's direct children, and sends them into the
