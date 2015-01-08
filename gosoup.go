@@ -2,6 +2,8 @@
 GoSoup is a helper to explore the DOM of an HTML file. It wraps the golang.org/x/net/html
 package, providing helpful methods.
 
+Iterators
+
 The iteration methods provided here return 2 channels: an output channel, to read
 the iterated elements from, and an exit channel.
 
