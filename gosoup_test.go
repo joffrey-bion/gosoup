@@ -86,20 +86,20 @@ func TestChildren(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ch, _ := doc.Children()
+	ch := doc.Children().Nodes
 	htmlNode := assertNodeWithData(t, ch, "html")
 	assertNoMoreNodes(t, ch)
 
-	ch, _ = htmlNode.Children()
+	ch = htmlNode.Children().Nodes
 	head := assertNodeWithData(t, ch, "head")
 	body := assertNodeWithData(t, ch, "body")
 	assertNoMoreNodes(t, ch)
 
-	ch, _ = head.Children()
+	ch = head.Children().Nodes
 	title := assertNodeWithData(t, ch, "title")
 	assertNoMoreNodes(t, ch)
 
-	ch, _ = body.Children()
+	ch = body.Children().Nodes
 	aside := assertNodeWithData(t, ch, "aside")
 	assertNodeWithData(t, ch, "hr")
 	anchor := assertNodeWithData(t, ch, "a")
@@ -114,15 +114,15 @@ func TestChildren(t *testing.T) {
 	assertNodeWithData(t, ch, "hr")
 	assertNoMoreNodes(t, ch)
 
-	ch, _ = title.Children()
+	ch = title.Children().Nodes
 	assertNodeWithData(t, ch, "Your Title Here")
 	assertNoMoreNodes(t, ch)
 
-	ch, _ = aside.Children()
+	ch = aside.Children().Nodes
 	assertNodeWithData(t, ch, "img")
 	assertNoMoreNodes(t, ch)
 
-	ch, _ = anchor.Children()
+	ch = anchor.Children().Nodes
 	assertNodeWithData(t, ch, "Link Name")
 	assertNoMoreNodes(t, ch)
 }
@@ -134,7 +134,7 @@ func TestDescendants(t *testing.T) {
 	}
 
 	_ = doc
-	//	ch, _ := doc.Descendants()
+	//	ch := doc.Descendants().Nodes
 	//	assertNodeWithData(t, ch, "html")
 	//	assertNodeWithData(t, ch, "head")
 	//	assertNodeWithData(t, ch, "title")

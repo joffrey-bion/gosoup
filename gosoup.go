@@ -1,35 +1,30 @@
 /*
-GoSoup is a helper to explore the DOM of an HTML file. It wraps the golang.org/x/net/html
-package, providing helpful methods.
+GoSoup allows to parse HTML content and browse the produced tree. It wraps the
+golang.org/x/net/html package, providing helpful methods.
 
 Iterators
 
-The iteration methods provided here return 2 channels: an output channel, to read
-the iterated elements from, and an exit channel.
+The iteration methods provided here return an Iterator object, containing an
+output channel, to read the iterated elements from.
+The DOM tree mustn't be modified while reading from the iterator.
 
-The caller should send something (the value does not matter) on the exit
-channel if he does not exhaust the output channel. This prevents the internal
-goroutines from blocking forever if there are more elements to send. For instance:
+The caller should close the iterator if he does not exhaust the output channel.
+This prevents the internal goroutines from blocking forever if there are more
+elements to send. For instance:
 
-    children, exit := node.Children()
-    for child := range children {
+    it := node.Children()
+    for child := range it.Nodes {
         if (something) {
-            // we break early from the loop, notify GoSoup via the exit channel
-            exit <- true
+            // we break early from the loop, close the iterator
+            it.Close()
             break
         }
         doStuffWith(child)
     }
 
-If the loop ends normally, there is no need to send anything on the exit channel.
-There is also no need to close the channels. Gosoup will close the output channel
-when all elements have been sent in order to end the caller's loop.
-
-The elements are sent to the output channel in an unspecified order, unless
-explicitely stated otherwise.
-
-The DOM tree mustn't be modified while reading from the returned channel, because
-the iteration is done concurrently.
+If the loop ends normally, there is no need to close the iterator.
+Gosoup will close the output channel when all elements have been sent in order
+to end the caller's loop.
 */
 package gosoup
 
@@ -40,11 +35,11 @@ import (
 
 func GetDocContentType(node *Node) (string, error) {
 	root := node.Root()
-	head := First(root.DescendantsByTag("head"))
+	head := root.DescendantsByTag("head").First()
 	if head == nil {
 		return "", errors.New("GetDocCharset: head not found")
 	}
-	meta := First(head.DescendantsByAttrValueContaining("content", "charset="))
+	meta := head.DescendantsByAttrValueContaining("content", "charset=").First()
 	if meta == nil {
 		return "", errors.New("GetDocCharset: meta not found")
 	}

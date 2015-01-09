@@ -2,61 +2,108 @@ package gosoup
 
 import (
 	"strings"
-	"sync"
 )
 
 const (
-	blank string = " \t\n\r"
-	nodeBufferSize int = 20
+	blank          string = " \t\n\r"
+	nodeBufferSize int    = 20
 )
 
-// First retrieves the first node from the given output channel, and takes
-// care of the cleaning through the exit channel.
+// Iterator is useful to iterate over a set of nodes without storing all references
+// in a slice.
 //
-// This function can be particularly useful when combined with the iterating
-// functions of GoSoup:
+// It also allows chaining methods to filter the nodes in some way.
 //
-//     firstChild := gosoup.First(node.Children())
+// The caller should close the iterator via the Close() method when no more nodes
+// are going to be read, unless he exhausts the iterator's Nodes channel. This
+// unblocks internal goroutines and allows their garbage collection.
+type Iterator struct {
+	Nodes  <-chan *Node
+	exit   chan interface{}
+	closed bool
+}
+
+// Close notifies this Iterator that no more nodes will be read from it.
+// This prevents the internal goroutines from hanging forever.
 //
-//     firstMyClassDescendant := gosoup.First(node.DescendantsByAttributeValueContaining("class", "myClass"))
-//
-// No need to take care of channels here.
-func First(output <-chan *Node, exit chan interface{}) *Node {
-	node := <-output
-	exit <- true
+// This function should be called when the caller stops reading nodes while
+// the channel is not exhausted. When the channel is exhausted, there is no
+// need to call Close().
+func (i Iterator) Close() {
+	if !i.closed {
+		i.exit <- true
+		i.closed = true
+	}
+}
+
+// First retrieves the first node of this Iterator and closes it.
+func (i Iterator) First() *Node {
+	node, ok := <-i.Nodes
+	if !ok {
+		// no nodes at all
+		return nil
+	}
+	// at least one node, notify that we break early
+	i.Close()
 	return node
 }
 
-// Collect gathers all nodes from the given output channel in a slice.
-//
-// This function can be particularly useful when combined with the iterating
-// functions of GoSoup.
-func Collect(output <-chan *Node, exit chan interface{}) []*Node {
+// All retrieves all nodes from this Iterator and returns them as a slice.
+func (i Iterator) All() []*Node {
 	var list []*Node
-	for node := range output {
+	for node := range i.Nodes {
 		list = append(list, node)
 	}
 	return list
 }
 
-func forward(in <-chan interface{}, out chan interface{}) {
-	for e := range in {
-		out <- e
+// Apply applies the given function to all Nodes of this Iterator.
+func (i Iterator) Apply(f func(n *Node)) {
+	for node := range i.Nodes {
+		f(node)
 	}
 }
 
-func forwardNodes(in <-chan *Node, out chan *Node) {
-	for e := range in {
-		out <- e
-	}
+// Filter returns a new Iterator that only iterates on the Node that
+// match the given predicate.
+func (i Iterator) Filter(predicate func(*Node) bool) Iterator {
+	c := make(chan *Node)
+	filtered := Iterator{c, i.exit, false}
+	go func() {
+		for node := range i.Nodes {
+			if predicate(node) {
+				c <- node
+			}
+		}
+		close(c)
+	}()
+	return filtered
 }
 
-// notBlank returns true if the node's data is not full of blank space
-func notBlank(node *Node) bool {
-	return strings.Trim(node.Data, blank) != ""
+// Limit returns a new Iterator that automatically stops if it has
+// read the given maximum number of Nodes.
+func (i Iterator) Limit(max int) Iterator {
+	c := make(chan *Node)
+	limited := Iterator{c, i.exit, false}
+	go func() {
+		count := 0
+		for node := range i.Nodes {
+			c <- node
+			count++
+			if count > max {
+				i.Close()
+				break
+			}
+		}
+		close(c)
+	}()
+	return limited
 }
 
 // clean trims leading and trailing whitespace if the node is a TextNode.
+//
+// Calling this method actually mutates the given node.
+// It returns the same -although mutated- node for convenience.
 func clean(node *Node) *Node {
 	if node.Type == TextNode {
 		node.Data = strings.Trim(node.Data, blank)
@@ -64,85 +111,70 @@ func clean(node *Node) *Node {
 	return node
 }
 
-// DescendantsIterator iterates on this node's descendants in depth-first order,
+// notBlank returns true if the node's data is not full of blank space
+func notBlank(node *Node) bool {
+	return strings.Trim(node.Data, blank) != ""
+}
+
+// TreeIterator iterates on this node's descendants in depth-first order,
 // and send into the output channel the ones that match the given predicate.
 //
 // If recursive is false, only direct children are considered.
 //
 // The caller should send anything into the exit channel to indicate that no
 // more nodes will be read, unless he finishes the loop.
-func (node *Node) DescendantsIterator(predicate func(node *Node) bool, recursive bool) (output <-chan *Node, exit chan interface{}) {
+func (node *Node) TreeIterator(recursive bool) Iterator {
 	if node == nil {
 		panic("iterateOnDescendants: null input node")
 	}
 	out := make(chan *Node, nodeBufferSize)
-	exit = make(chan interface{}, 1)
+	exit := make(chan interface{}, 1)
 	go func() {
-		var wg sync.WaitGroup
-		for child := node.FirstChild; child != nil; child = child.NextSibling {
-			select {
-			case <-exit:
-				// the caller will not read any more nodes, so
-				// don't try to send to avoid blocking forever
-				wg.Wait()
-				close(out)
-				return
-			default:
-				if predicate(child) {
-					out <- clean(child)
-				}
-				if recursive {
-					// browse the child's children
-					wg.Add(1)
-					go func(child *Node) {
-						defer wg.Done()
-						in, subexit := child.DescendantsIterator(predicate, recursive)
-						go forward(exit, subexit)
-						forwardNodes(in, out)
-					}(child)
-				}
-			}
-		}
-		wg.Wait()
+		node.recIterateOnDescendants(recursive, out, exit)
 		close(out)
 	}()
-	return out, exit
+	return Iterator{out, exit, false}
 }
 
-// ChildrenMatching finds this node's direct children that match the
-// given predicate, and sends them into the output channel.
-//
-// The caller should send anything into the exit channel to indicate that no
-// more nodes will be read, unless he finishes the loop.
-func (node *Node) ChildrenMatching(predicate func(node *Node) bool) (output <-chan *Node, exit chan interface{}) {
-	return node.DescendantsIterator(predicate, false)
+func (node *Node) recIterateOnDescendants(recursive bool, out chan<- *Node, exit chan interface{}) {
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		select {
+		case <-exit:
+			// the caller will not read any more nodes, so
+			// don't try to send to avoid blocking forever
+			exit <- true // to exit all calls in the recursive stack
+			return
+		default:
+			out <- clean(child)
+			if recursive {
+				// browse the child's children
+				child.recIterateOnDescendants(recursive, out, exit)
+			}
+		}
+	}
 }
 
-// DescendantsMatching finds this node's descendants that match the
-// given predicate, and sends them into the output channel.
-//
-// The caller should send anything into the exit channel to indicate that no
-// more nodes will be read, unless he finishes the loop.
-func (node *Node) DescendantsMatching(predicate func(node *Node) bool) (output <-chan *Node, exit chan interface{}) {
-	return node.DescendantsIterator(predicate, true)
+// Children returns an Iterator on this node's direct children.
+func (node *Node) Children() Iterator {
+	return node.TreeIterator(false).Filter(notBlank)
 }
 
-// Children finds this node's direct children, and sends them into the
-// output channel.
-//
-// The caller should send anything into the exit channel to indicate that no
-// more nodes will be read, unless he finishes the loop.
-func (node *Node) Children() (output <-chan *Node, exit chan interface{}) {
-	return node.ChildrenMatching(notBlank)
+// Descendants returns an Iterator on this node's descendants, in depth-first
+// order.
+func (node *Node) Descendants() Iterator {
+	return node.TreeIterator(true).Filter(notBlank)
 }
 
-// Descendants finds this node's descendants, and sends them into the
-// output channel.
-//
-// The caller should send anything into the exit channel to indicate that no
-// more nodes will be read, unless he finishes the loop.
-func (node *Node) Descendants() (output <-chan *Node, exit chan interface{}) {
-	return node.DescendantsMatching(notBlank)
+// ChildrenMatching returns an Iterator on this node's direct children that match
+// the given predicate.
+func (node *Node) ChildrenMatching(predicate func(node *Node) bool) Iterator {
+	return node.Children().Filter(predicate)
+}
+
+// DescendantsMatching returns an Iterator on this node's descendants that match
+// the given predicate, in depth-first order.
+func (node *Node) DescendantsMatching(predicate func(node *Node) bool) Iterator {
+	return node.Descendants().Filter(predicate)
 }
 
 func predicateIsTag(tagName string) func(node *Node) bool {
@@ -151,21 +183,15 @@ func predicateIsTag(tagName string) func(node *Node) bool {
 	}
 }
 
-// ChildrenByTag finds the given node's direct children with the specified
+// ChildrenByTag returns an Iterator on this node's direct children with the specified
 // tag name.
-//
-// The caller should send anything into the exit channel to indicate that no 
-// more nodes will be read, unless he finishes the loop.
-func (node *Node) ChildrenByTag(tagName string) (output <-chan *Node, exit chan interface{}) {
+func (node *Node) ChildrenByTag(tagName string) Iterator {
 	return node.ChildrenMatching(predicateIsTag(tagName))
 }
 
-// DescendantsByTag finds the given node's descendants with the specified
-// tag name.
-//
-// The caller should send anything into the exit channel to indicate that no 
-// more nodes will be read, unless he finishes the loop.
-func (node *Node) DescendantsByTag(tagName string) (output <-chan *Node, exit chan interface{}) {
+// DescendantsByTag returns an Iterator on this node's descendants with the specified
+// tag name, in depth-first order.
+func (node *Node) DescendantsByTag(tagName string) Iterator {
 	return node.DescendantsMatching(predicateIsTag(tagName))
 }
 
@@ -175,20 +201,14 @@ func predicateAttrValueContains(attrKey, match string) func(node *Node) bool {
 	}
 }
 
-// ChildrenByAttrValueContaining finds the given node's direct children
+// ChildrenByAttrValueContaining returns an Iterator on this node's direct children
 // that have attributes whose value contains the match string.
-//
-// The caller should send anything into the exit channel to indicate that no 
-// more nodes will be read, unless he finishes the loop.
-func (node *Node) ChildrenByAttrValueContaining(attrKey, match string) (output <-chan *Node, exit chan interface{}) {
+func (node *Node) ChildrenByAttrValueContaining(attrKey, match string) Iterator {
 	return node.ChildrenMatching(predicateAttrValueContains(attrKey, match))
 }
 
-// DescendantsByAttrValueContaining finds the given node's direct children
-// that have attributes whose value contains the match string.
-//
-// The caller should send anything into the exit channel to indicate that no 
-// more nodes will be read, unless he finishes the loop.
-func (node *Node) DescendantsByAttrValueContaining(attrKey, match string) (output <-chan *Node, exit chan interface{}) {
+// DescendantsByAttrValueContaining returns an Iterator on this node's descendants
+// that have attributes whose value contains the match string, in depth-first order.
+func (node *Node) DescendantsByAttrValueContaining(attrKey, match string) Iterator {
 	return node.DescendantsMatching(predicateAttrValueContains(attrKey, match))
 }
