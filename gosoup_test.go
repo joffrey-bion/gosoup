@@ -133,26 +133,93 @@ func TestDescendants(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_ = doc
-	//	ch := doc.Descendants().Nodes
-	//	assertNodeWithData(t, ch, "html")
-	//	assertNodeWithData(t, ch, "head")
-	//	assertNodeWithData(t, ch, "title")
-	//	assertNodeWithData(t, ch, "Your Title Here")
-	//	assertNodeWithData(t, ch, "body")
-	//	assertNodeWithData(t, ch, "aside")
-	//	assertNodeWithData(t, ch, "img")
-	//	assertNodeWithData(t, ch, "hr")
-	//	assertNodeWithData(t, ch, "a")
-	//	assertNodeWithData(t, ch, "Link Name")
-	//	assertNodeWithData(t, ch, "is a link to another nifty site")
-	//	assertNodeWithData(t, ch, "h1")
-	//	assertNodeWithData(t, ch, "h2")
-	//	assertNodeWithData(t, ch, "Send me mail at")
-	//	assertNodeWithData(t, ch, "a")
-	//	assertNodeWithData(t, ch, ".")
-	//	assertNodeWithData(t, ch, "p")
-	//	assertNodeWithData(t, ch, "p")
-	//	assertNodeWithData(t, ch, "hr")
-	//	assertNoMoreNodes(t, ch)
+	ch := doc.Descendants().Nodes
+	assertNodeWithData(t, ch, "html")
+	assertNodeWithData(t, ch, "head")
+	assertNodeWithData(t, ch, "title")
+	assertNodeWithData(t, ch, "Your Title Here")
+	assertNodeWithData(t, ch, "body")
+	assertNodeWithData(t, ch, "aside")
+	assertNodeWithData(t, ch, "img")
+	assertNodeWithData(t, ch, "hr")
+	assertNodeWithData(t, ch, "a")
+	assertNodeWithData(t, ch, "Link Name")
+	assertNodeWithData(t, ch, "is a link to another nifty site")
+	assertNodeWithData(t, ch, "h1")
+	assertNodeWithData(t, ch, "This is a Header")
+	assertNodeWithData(t, ch, "h2")
+	assertNodeWithData(t, ch, "This is a Medium Header")
+	assertNodeWithData(t, ch, "Send me mail at")
+	assertNodeWithData(t, ch, "a")
+	assertNodeWithData(t, ch, "support@yourcompany.com")
+	assertNodeWithData(t, ch, ".")
+	assertNodeWithData(t, ch, "p")
+	assertNodeWithData(t, ch, "This is a new paragraph!")
+	assertNodeWithData(t, ch, "p")
+	assertNodeWithData(t, ch, "b")
+	assertNodeWithData(t, ch, "This is a new paragraph!")
+	assertNodeWithData(t, ch, "br")
+	assertNodeWithData(t, ch, "b")
+	assertNodeWithData(t, ch, "i")
+	assertNodeWithData(t, ch, "This is a new sentence without a paragraph break, in bold italics.")
+	assertNodeWithData(t, ch, "hr")
+	assertNoMoreNodes(t, ch)
+}
+
+func TestChildrenMatching(t *testing.T) {
+	doc, err := Parse(strings.NewReader(HTML))
+	if err != nil {
+		t.Fatal(err)
+	}
+	
+	containsH := func(n *Node) bool {
+		return strings.ContainsAny(n.Data, "hH")
+	}
+
+	ch := doc.Children().Nodes
+	htmlNode := assertNodeWithData(t, ch, "html")
+	assertNoMoreNodes(t, ch)
+
+	ch = htmlNode.Children().Nodes
+	head := assertNodeWithData(t, ch, "head")
+	body := assertNodeWithData(t, ch, "body")
+	assertNoMoreNodes(t, ch)
+
+	ch = head.ChildrenMatching(containsH).Nodes
+	assertNoMoreNodes(t, ch)
+
+	ch = body.ChildrenMatching(containsH).Nodes
+	assertNodeWithData(t, ch, "hr")
+	assertNodeWithData(t, ch, "is a link to another nifty site")
+	assertNodeWithData(t, ch, "h1")
+	assertNodeWithData(t, ch, "h2")
+	assertNodeWithData(t, ch, "hr")
+	assertNoMoreNodes(t, ch)
+}
+
+func TestDescendantsMatching(t *testing.T) {
+	doc, err := Parse(strings.NewReader(HTML))
+	if err != nil {
+		t.Fatal(err)
+	}
+	
+	containsH := func(n *Node) bool {
+		return strings.ContainsAny(n.Data, "hH")
+	}
+
+	ch := doc.DescendantsMatching(containsH).Nodes
+	assertNodeWithData(t, ch, "html")
+	assertNodeWithData(t, ch, "head")
+	assertNodeWithData(t, ch, "Your Title Here")
+	assertNodeWithData(t, ch, "hr")
+	assertNodeWithData(t, ch, "is a link to another nifty site")
+	assertNodeWithData(t, ch, "h1")
+	assertNodeWithData(t, ch, "This is a Header")
+	assertNodeWithData(t, ch, "h2")
+	assertNodeWithData(t, ch, "This is a Medium Header")
+	assertNodeWithData(t, ch, "This is a new paragraph!")
+	assertNodeWithData(t, ch, "This is a new paragraph!")
+	assertNodeWithData(t, ch, "This is a new sentence without a paragraph break, in bold italics.")
+	assertNodeWithData(t, ch, "hr")
+	assertNoMoreNodes(t, ch)
 }
