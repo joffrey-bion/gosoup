@@ -115,7 +115,7 @@ func TestChildren(t *testing.T) {
 	assertNoMoreNodes(t, ch)
 
 	ch = title.Children().Nodes
-	assertNodeWithData(t, ch, "Your Title Here")
+	text := assertNodeWithData(t, ch, "Your Title Here")
 	assertNoMoreNodes(t, ch)
 
 	ch = aside.Children().Nodes
@@ -124,6 +124,9 @@ func TestChildren(t *testing.T) {
 
 	ch = anchor.Children().Nodes
 	assertNodeWithData(t, ch, "Link Name")
+	assertNoMoreNodes(t, ch)
+
+	ch = text.Children().Nodes
 	assertNoMoreNodes(t, ch)
 }
 
