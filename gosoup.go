@@ -56,3 +56,70 @@ func GetDocCharset(node *Node) (string, error) {
 	charsetWithoutBullshit := strings.Split(charsetWithBullshit, ";")[0]
 	return strings.Split(charsetWithoutBullshit, " ")[0], nil // just in case
 }
+
+func predicateNotBlank(n *Node) bool {
+	return !n.IsBlankText()
+}
+
+func clean(n *Node) *Node {
+	return n.CleanData()
+}
+
+// Children returns an iterator on this node's direct children.
+func (node *Node) Children() NodeIterator {
+	return node.TreeIterator(false).Filter(predicateNotBlank).Map(clean)
+}
+
+// Descendants returns an iterator on this node's descendants, in depth-first
+// order.
+func (node *Node) Descendants() NodeIterator {
+	return node.TreeIterator(true).Filter(predicateNotBlank).Map(clean)
+}
+
+// ChildrenMatching returns an iterator on this node's direct children that match
+// the given predicate.
+func (node *Node) ChildrenMatching(predicate func(node *Node) bool) NodeIterator {
+	return node.Children().Filter(predicate)
+}
+
+// DescendantsMatching returns an iterator on this node's descendants that match
+// the given predicate, in depth-first order.
+func (node *Node) DescendantsMatching(predicate func(node *Node) bool) NodeIterator {
+	return node.Descendants().Filter(predicate)
+}
+
+func predicateIsTag(tagName string) func(node *Node) bool {
+	return func(node *Node) bool {
+		return node.IsTag(tagName)
+	}
+}
+
+// ChildrenByTag returns an iterator on this node's direct children with the specified
+// tag name.
+func (node *Node) ChildrenByTag(tagName string) NodeIterator {
+	return node.ChildrenMatching(predicateIsTag(tagName))
+}
+
+// DescendantsByTag returns an iterator on this node's descendants with the specified
+// tag name, in depth-first order.
+func (node *Node) DescendantsByTag(tagName string) NodeIterator {
+	return node.DescendantsMatching(predicateIsTag(tagName))
+}
+
+func predicateAttrValueContains(attrKey, match string) func(node *Node) bool {
+	return func(node *Node) bool {
+		return node.AttrValueContains(attrKey, match)
+	}
+}
+
+// ChildrenByAttrValueContaining returns an iterator on this node's direct children
+// that have attributes whose value contains the match string.
+func (node *Node) ChildrenByAttrValueContaining(attrKey, match string) NodeIterator {
+	return node.ChildrenMatching(predicateAttrValueContains(attrKey, match))
+}
+
+// DescendantsByAttrValueContaining returns an iterator on this node's descendants
+// that have attributes whose value contains the match string, in depth-first order.
+func (node *Node) DescendantsByAttrValueContaining(attrKey, match string) NodeIterator {
+	return node.DescendantsMatching(predicateAttrValueContains(attrKey, match))
+}

@@ -174,7 +174,7 @@ func TestChildrenMatching(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	containsH := func(n *Node) bool {
 		return strings.ContainsAny(n.Data, "hH")
 	}
@@ -205,7 +205,7 @@ func TestDescendantsMatching(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	containsH := func(n *Node) bool {
 		return strings.ContainsAny(n.Data, "hH")
 	}

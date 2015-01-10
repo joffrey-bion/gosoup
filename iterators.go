@@ -1,18 +1,13 @@
 package gosoup
 
-import (
-	"strings"
-)
-
 const (
-	blank          string = " \t\n\r"
-	nodeBufferSize int    = 20
+	nodeBufferSize int = 20
 )
 
 // NodeIterator is useful to iterate over a set of nodes without storing all
 // references in a slice.
 //
-// It also allows chaining methods to filter the nodes in some way.
+// It also allows chaining methods to process the nodes in a pipeline.
 //
 // The caller should close the iterator via the Close() method when no more nodes
 // are going to be read, unless he exhausts the iterator's Nodes channel. This
@@ -26,9 +21,9 @@ type NodeIterator struct {
 // Close notifies this NodeIterator that no more nodes will be read from it.
 // This prevents the internal goroutines from hanging forever.
 //
-// This function should be called when the caller stops reading nodes while
-// the channel is not exhausted. When the channel is exhausted, there is no
-// need to call Close().
+// This function should be called when the caller stops reading nodes while the
+// channel is not exhausted. When the channel is exhausted, there is no need to
+// call Close().
 func (i NodeIterator) Close() {
 	if !i.closed {
 		i.exit <- true
@@ -36,7 +31,8 @@ func (i NodeIterator) Close() {
 	}
 }
 
-// First retrieves the first node of this iterator and closes it.
+// First retrieves the first node of this iterator and closes it. It returns nil
+// if the iterator has no node to provide.
 func (i NodeIterator) First() *Node {
 	node, ok := <-i.Nodes
 	if !ok {
@@ -57,15 +53,15 @@ func (i NodeIterator) All() []*Node {
 	return list
 }
 
-// Apply applies the given function to all Nodes of this iterator.
+// Apply applies the given function to all nodes of this iterator.
 func (i NodeIterator) Apply(f func(n *Node)) {
 	for node := range i.Nodes {
 		f(node)
 	}
 }
 
-// Filter returns a new iterator that only iterates on the Node that
-// match the given predicate.
+// Filter returns a new iterator that only iterates on the nodes of this iterator
+// that match the given predicate.
 func (i NodeIterator) Filter(predicate func(*Node) bool) NodeIterator {
 	c := make(chan *Node)
 	filtered := NodeIterator{c, i.exit, false}
@@ -80,8 +76,22 @@ func (i NodeIterator) Filter(predicate func(*Node) bool) NodeIterator {
 	return filtered
 }
 
-// Limit returns a new iterator that automatically stops if it has
-// read the given maximum number of Nodes.
+// Map returns a new iterator that iterates on the nodes produced by applying the
+// given mapping function on each node of this iterator.
+func (i NodeIterator) Map(mapper func(*Node) *Node) NodeIterator {
+	c := make(chan *Node)
+	filtered := NodeIterator{c, i.exit, false}
+	go func() {
+		for node := range i.Nodes {
+			c <- mapper(node)
+		}
+		close(c)
+	}()
+	return filtered
+}
+
+// Limit returns a new iterator that automatically stops if it has read the given
+// maximum number of Nodes.
 func (i NodeIterator) Limit(max int) NodeIterator {
 	c := make(chan *Node)
 	limited := NodeIterator{c, i.exit, false}
@@ -98,22 +108,6 @@ func (i NodeIterator) Limit(max int) NodeIterator {
 		close(c)
 	}()
 	return limited
-}
-
-// clean trims leading and trailing whitespace if the node is a TextNode.
-//
-// Calling this method actually mutates the given node.
-// It returns the same -although mutated- node for convenience.
-func clean(node *Node) *Node {
-	if node.Type == TextNode {
-		node.Data = strings.Trim(node.Data, blank)
-	}
-	return node
-}
-
-// notBlank returns true if the node's data is not full of blank space
-func notBlank(node *Node) bool {
-	return strings.Trim(node.Data, blank) != ""
 }
 
 // TreeIterator returns an iterator on this node's descendants in depth-first order.
@@ -140,70 +134,11 @@ func (node *Node) recIterateOnDescendants(recursive bool, out chan<- *Node, exit
 			exit <- true // to exit all calls in the recursive stack
 			return
 		default:
-			out <- clean(child)
+			out <- child
 			if recursive {
 				// browse the child's children
 				child.recIterateOnDescendants(recursive, out, exit)
 			}
 		}
 	}
-}
-
-// Children returns an iterator on this node's direct children.
-func (node *Node) Children() NodeIterator {
-	return node.TreeIterator(false).Filter(notBlank)
-}
-
-// Descendants returns an iterator on this node's descendants, in depth-first
-// order.
-func (node *Node) Descendants() NodeIterator {
-	return node.TreeIterator(true).Filter(notBlank)
-}
-
-// ChildrenMatching returns an iterator on this node's direct children that match
-// the given predicate.
-func (node *Node) ChildrenMatching(predicate func(node *Node) bool) NodeIterator {
-	return node.Children().Filter(predicate)
-}
-
-// DescendantsMatching returns an iterator on this node's descendants that match
-// the given predicate, in depth-first order.
-func (node *Node) DescendantsMatching(predicate func(node *Node) bool) NodeIterator {
-	return node.Descendants().Filter(predicate)
-}
-
-func predicateIsTag(tagName string) func(node *Node) bool {
-	return func(node *Node) bool {
-		return node.IsTag(tagName)
-	}
-}
-
-// ChildrenByTag returns an iterator on this node's direct children with the specified
-// tag name.
-func (node *Node) ChildrenByTag(tagName string) NodeIterator {
-	return node.ChildrenMatching(predicateIsTag(tagName))
-}
-
-// DescendantsByTag returns an iterator on this node's descendants with the specified
-// tag name, in depth-first order.
-func (node *Node) DescendantsByTag(tagName string) NodeIterator {
-	return node.DescendantsMatching(predicateIsTag(tagName))
-}
-
-func predicateAttrValueContains(attrKey, match string) func(node *Node) bool {
-	return func(node *Node) bool {
-		return node.AttrValueContains(attrKey, match)
-	}
-}
-
-// ChildrenByAttrValueContaining returns an iterator on this node's direct children
-// that have attributes whose value contains the match string.
-func (node *Node) ChildrenByAttrValueContaining(attrKey, match string) NodeIterator {
-	return node.ChildrenMatching(predicateAttrValueContains(attrKey, match))
-}
-
-// DescendantsByAttrValueContaining returns an iterator on this node's descendants
-// that have attributes whose value contains the match string, in depth-first order.
-func (node *Node) DescendantsByAttrValueContaining(attrKey, match string) NodeIterator {
-	return node.DescendantsMatching(predicateAttrValueContains(attrKey, match))
 }

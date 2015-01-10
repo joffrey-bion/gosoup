@@ -6,17 +6,21 @@ import (
 	"strings"
 )
 
+const (
+	blank string = " \t\n\r"
+)
+
 type Attribute html.Attribute
 
 type NodeType html.NodeType
 
 const (
-    ErrorNode NodeType = iota
-    TextNode
-    DocumentNode
-    ElementNode
-    CommentNode
-    DoctypeNode
+	ErrorNode NodeType = iota
+	TextNode
+	DocumentNode
+	ElementNode
+	CommentNode
+	DoctypeNode
 )
 
 type Node struct {
@@ -81,4 +85,19 @@ func (node *Node) AttrValueContains(attrKey, match string) bool {
 // IsTag returns true if this node is a tag with the given name.
 func (node *Node) IsTag(name string) bool {
 	return node.Type == ElementNode && node.Data == name
+}
+
+// CleanData trims leading and trailing whitespace if this node is a TextNode.
+//
+// It returns this node for convenient chaining.
+func (node *Node) CleanData() *Node {
+	if node.Type == TextNode {
+		node.Data = strings.Trim(node.Data, blank)
+	}
+	return node
+}
+
+// IsBlankText returns true if this node is a TextNode full of blank space.
+func (node *Node) IsBlankText() bool {
+	return node.Type == TextNode && strings.Trim(node.Data, blank) == ""
 }
