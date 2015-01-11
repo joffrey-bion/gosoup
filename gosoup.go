@@ -2,10 +2,20 @@
 GoSoup allows to parse HTML content and browse the produced tree. It wraps the
 golang.org/x/net/html package, providing helpful methods.
 
+Iterators
+
+The most interesting functions provided by GoSoup are the iterator functions.
+These functions return a NodeIterator object, which can then be filtered and/or
+mapped and the nodes can then be collected into a slice.
+
+Read about the NodeIterator type and its methods to get an idea of how flexible
+and powerful it is. Should that power not suffice, you can have full control of
+what happens by directly using the internals of the NodeIterator type.
+
 Raw Use Of Iterators
 
-The NodeIterator objects containin an read-only channel Nodes to read the nodes
-from. The DOM tree mustn't be modified while reading from the iterator.
+The NodeIterator objects contains a read-only channel to read the nodes from.
+The DOM tree mustn't be modified while reading from the iterator.
 
 The caller should close the iterator if he does not exhaust the output channel.
 This prevents the internal goroutines from blocking forever if there are more
