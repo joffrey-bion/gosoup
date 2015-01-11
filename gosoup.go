@@ -2,11 +2,10 @@
 GoSoup allows to parse HTML content and browse the produced tree. It wraps the
 golang.org/x/net/html package, providing helpful methods.
 
-Iterators
+Raw Use Of Iterators
 
-The iteration methods provided here return an Iterator object, containing an
-output channel, to read the iterated elements from.
-The DOM tree mustn't be modified while reading from the iterator.
+The NodeIterator objects containin an read-only channel Nodes to read the nodes
+from. The DOM tree mustn't be modified while reading from the iterator.
 
 The caller should close the iterator if he does not exhaust the output channel.
 This prevents the internal goroutines from blocking forever if there are more
@@ -33,19 +32,23 @@ import (
 	"strings"
 )
 
+// GetDocContentType returns the content-type string description taken from a <meta>
+// element in the <head> part of the HTML tree.
 func GetDocContentType(node *Node) (string, error) {
-	root := node.Root()
+	root := node.Root() // moves to the document node
 	head := root.DescendantsByTag("head").First()
 	if head == nil {
-		return "", errors.New("GetDocCharset: head not found")
+		return "", errors.New("GetDocContentType: head not found")
 	}
 	meta := head.DescendantsByAttrValueContaining("content", "charset=").First()
 	if meta == nil {
-		return "", errors.New("GetDocCharset: meta not found")
+		return "", errors.New("GetDocContentType: no head child with 'content' attribute containing 'charset'")
 	}
 	return meta.Attr("content"), nil
 }
 
+// GetDocCharset returns the charset contained in the content-type string description
+// taken from a <meta> element in the <head> part of the HTML tree.
 func GetDocCharset(node *Node) (string, error) {
 	content, err := GetDocContentType(node)
 	if err != nil {
@@ -57,23 +60,23 @@ func GetDocCharset(node *Node) (string, error) {
 	return strings.Split(charsetWithoutBullshit, " ")[0], nil // just in case
 }
 
-func predicateNotBlank(n *Node) bool {
+func notBlank(n *Node) bool {
 	return !n.IsBlankText()
 }
 
 func clean(n *Node) *Node {
-	return n.CleanData()
+	n.TrimTextData()
+	return n
 }
 
 // Children returns an iterator on this node's direct children.
 func (node *Node) Children() NodeIterator {
-	return node.TreeIterator(false).Filter(predicateNotBlank).Map(clean)
+	return node.TreeIterator(false).Filter(notBlank).Map(clean)
 }
 
-// Descendants returns an iterator on this node's descendants, in depth-first
-// order.
+// Descendants returns an iterator on this node's descendants, in depth-first order.
 func (node *Node) Descendants() NodeIterator {
-	return node.TreeIterator(true).Filter(predicateNotBlank).Map(clean)
+	return node.TreeIterator(true).Filter(notBlank).Map(clean)
 }
 
 // ChildrenMatching returns an iterator on this node's direct children that match

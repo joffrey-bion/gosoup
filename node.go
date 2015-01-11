@@ -33,7 +33,7 @@ type Node struct {
 	Attrs     []Attribute
 }
 
-// Root returns the root of the document containing this node.
+// Root returns the root of the tree containing this node, namely the document node.
 func (node *Node) Root() *Node {
 	for node.Parent != nil {
 		node = node.Parent
@@ -63,10 +63,8 @@ func (node *Node) Attr(attrKey string) string {
 	panic("no such attribute '" + attrKey + "'")
 }
 
-// AttrOrDefault returns the value of the given attribute if this node
-// has that attribute, otherwise returns defaultValue.
-//
-// If this node does not have the specified attribute, defaultValue is returned.
+// AttrOrDefault returns the value of the given attribute, or defaultValue if this
+// node does not have that attribute.
 func (node *Node) AttrOrDefault(attrKey, defaultValue string) string {
 	for _, a := range node.Attrs {
 		if a.Key == attrKey {
@@ -76,8 +74,8 @@ func (node *Node) AttrOrDefault(attrKey, defaultValue string) string {
 	return defaultValue
 }
 
-// AttrValueContains returns true if the specified attribute's value
-// contains the match string.
+// AttrValueContains returns true if this node has the given attribute and the value
+// of that attribute contains the match string.
 func (node *Node) AttrValueContains(attrKey, match string) bool {
 	return node.HasAttr(attrKey) && strings.Contains(node.Attr(attrKey), match)
 }
@@ -87,14 +85,11 @@ func (node *Node) IsTag(name string) bool {
 	return node.Type == ElementNode && node.Data == name
 }
 
-// CleanData trims leading and trailing whitespace if this node is a TextNode.
-//
-// It returns this node for convenient chaining.
-func (node *Node) CleanData() *Node {
+// TrimTextData trims leading and trailing whitespace if this node is a TextNode.
+func (node *Node) TrimTextData() {
 	if node.Type == TextNode {
 		node.Data = strings.Trim(node.Data, blank)
 	}
-	return node
 }
 
 // IsBlankText returns true if this node is a TextNode full of blank space.
