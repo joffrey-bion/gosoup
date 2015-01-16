@@ -44,6 +44,17 @@ func (i NodeIterator) First() *Node {
 	return node
 }
 
+// Next retrieves the next node of this iterator. It returns nil if the iterator
+// has no node to provide.
+func (i NodeIterator) Next() *Node {
+	node, ok := <-i.Nodes
+	if !ok {
+		// no nodes at all
+		return nil
+	}
+	return node
+}
+
 // All retrieves all nodes from this iterator and returns them as a slice.
 func (i NodeIterator) All() []*Node {
 	var list []*Node
